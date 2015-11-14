@@ -1,9 +1,10 @@
-//#define F_CPU 16000000UL // in project's props
-
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
+
+#include "595.h"
+
 void delay_ms(uint16_t count) {
 	while (count--) {
 		_delay_ms(1);
@@ -15,56 +16,21 @@ void delay_us(uint16_t count) {
 	}
 }
 
-void inline DS_1() {
-	PORTC |= (1 << PC0);
-}
-void inline DS_0() {
-	PORTC &= ~(1 << PC0);
-}
-void inline SHCP_1() {
-	PORTC |= (1 << PC1);
-}
-void inline SHCP_0() {
-	PORTC &= ~(1 << PC1);
-}
-void inline STCP_1() {
-	PORTC |= (1 << PC2);
-}
-void inline STCP_0() {
-	PORTC &= ~(1 << PC2);
-}
-
-void inline transmit(char b) {
-	int cur;
-	for (cur = 128; cur != 0; cur /= 2) {
-		if (b & cur) {
-			DS_1();
-		} else {
-			DS_0();
-		}
-
-		SHCP_1();
-//		delay_us(1); // było 10
-		SHCP_0();
-//		delay_us(1);
-
-	}
-}
-
-void inline commit() {
-	STCP_1();
-//	delay_us(1); // było 10
-	STCP_0();
-//	delay_us(1);
-}
+/* Multiplexing */
 
 typedef struct cube {
-	char tab[4][16];
+	char tab[4][16]; // 4 layers, 16 in each layer
 } cube;
 
 cube main_cube;
-volatile int cur_layer = 0;
+volatile int current_layer = 0;
 volatile int pwm_iter = 0;
+
+/* Pushing data to shift registers. There are 3 74595's
+ * connected in series (Qs - DS), two of them drive 16 N-transistors
+ * that turn on vertical columns, one of them drives P-transistors
+ * that turn on layers.
+ */
 
 ISR(TIMER0_OVF_vect) {
 	TCNT0 = 210;
@@ -74,27 +40,30 @@ ISR(TIMER0_OVF_vect) {
 	//	transmit(2);
 	//	commit();
 
-	char tosend_pmos, tosend_left, tosend_right;
-	tosend_left = tosend_right = 0;
+	// 'ripple' through
 	pwm_iter++;
 	if (pwm_iter == 16) {
 		pwm_iter = 0;
-		cur_layer++;
+		current_layer++;
 	}
-	if (cur_layer == 4) {
-		cur_layer = 0;
+	if (current_layer == 4) {
+		current_layer = 0;
 	}
 
-	tosend_pmos = 0xff;
-	tosend_pmos &= ~(2 << cur_layer);
+	// layers
+	char tosend_pmos = 0xff;
+	tosend_pmos &= ~(2 << current_layer); // P-transistors active-low
+
+	// columns
+	char tosend_left = 0, tosend_right = 0;
 
 	int r;
 	for (r = 0; r < 8; ++r) {
-		if (main_cube.tab[cur_layer][r] > pwm_iter)
+		if (main_cube.tab[current_layer][r] > pwm_iter)
 			tosend_left |= (1 << r);
 	}
 	for (r = 8; r < 16; ++r) {
-		if (main_cube.tab[cur_layer][r] > pwm_iter)
+		if (main_cube.tab[current_layer][r] > pwm_iter)
 			tosend_right |= (1 << (r - 8));
 	}
 
@@ -102,7 +71,6 @@ ISR(TIMER0_OVF_vect) {
 	transmit(tosend_right);
 	transmit(tosend_left);
 	commit();
-
 }
 
 void inline set1(int layer, int pos) {
