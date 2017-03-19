@@ -52,7 +52,7 @@ ISR(TIMER0_OVF_vect) {
 
 	// layers
 	char tosend_pmos = 0xff;
-	tosend_pmos &= ~(2 << current_layer); // P-transistors active-low
+	tosend_pmos &= ~(16 << current_layer); // P-transistors active-low
 
 	// columns
 	char tosend_left = 0, tosend_right = 0;

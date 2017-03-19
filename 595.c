@@ -7,16 +7,16 @@ void DS_0() {
 	PORTC &= ~(1 << PC0);
 }
 void SHCP_1() {
-	PORTC |= (1 << PC1);
-}
-void SHCP_0() {
-	PORTC &= ~(1 << PC1);
-}
-void STCP_1() {
 	PORTC |= (1 << PC2);
 }
-void STCP_0() {
+void SHCP_0() {
 	PORTC &= ~(1 << PC2);
+}
+void STCP_1() {
+	PORTC |= (1 << PC1);
+}
+void STCP_0() {
+	PORTC &= ~(1 << PC1);
 }
 
 void transmit(char b) {
